@@ -1,6 +1,5 @@
 package cn.sihao.mirrorcast.rtsp;
 
-import android.support.annotation.NonNull;
 
 import java.io.UnsupportedEncodingException;
 import java.util.HashMap;
@@ -11,17 +10,21 @@ abstract class RtspMessage {
 
     byte[] body;
     String protocolVersion;
-    @NonNull
-    @Override
-    public String toString() {
+
+    public String toStringMsg(Boolean isOnReceiveMessage) {
         String str = "Failed to format the message";
         try {
-            str = new String(this.toByteArray(), "UTF-8");
+            str = new String(this.toByteArray(isOnReceiveMessage), "UTF-8");
         } catch (UnsupportedEncodingException e) {
             e.printStackTrace();
         }
         return str;
     }
 
-    abstract public byte[] toByteArray();
+    /**
+     * @param isOnReceiveMessage true为封装回传的信息 false为封装发送的信息
+     * @return byte数组
+     */
+    abstract public byte[] toByteArray(Boolean isOnReceiveMessage);
+
 }

@@ -13,7 +13,9 @@ import android.net.wifi.p2p.WifiP2pManager.ConnectionInfoListener;
 import android.net.wifi.p2p.WifiP2pManager.GroupInfoListener;
 import android.net.wifi.p2p.WifiP2pManager.PeerListListener;
 import android.text.TextUtils;
+
 import cn.sihao.mirrorcast.utils.ARPUtil;
+
 import com.orhanobut.logger.Logger;
 
 import java.lang.reflect.Constructor;
@@ -159,7 +161,7 @@ public class WiFiDirectMgr {
         @Override
         public void onPeersAvailable(WifiP2pDeviceList peers) {
             List<WifiP2pDevice> peerList = new ArrayList<>(peers.getDeviceList());
-            Logger.t(TAG).d(String.format("%d device(s) found", peerList.size()));
+            Logger.t(TAG).d(peerList.size() + " device(s) found");
             for (WifiP2pDevice peer : peerList) {
                 Logger.t(TAG).d(String.format("peer: %s", peer.deviceName));
             }
@@ -256,6 +258,7 @@ public class WiFiDirectMgr {
     private final BroadcastReceiver mBroadcastReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
+            //fixme why thread in main
             String action = intent.getAction();
             if (WifiP2pManager.WIFI_P2P_STATE_CHANGED_ACTION.equals(action)) {
                 // Determine if Wifi P2P mode is enabled or not, alert
@@ -270,6 +273,7 @@ public class WiFiDirectMgr {
 
                 // The peer list has changed! We should probably do something about
                 // that.
+                // fixme why would not get broadcast?
                 Logger.t(TAG).d("onReceive: WIFI_P2P_PEERS_CHANGED_ACTION");
                 if (null != mWifiP2pManager) {
                     mWifiP2pManager.requestPeers(mChannel, mPeerListListener);

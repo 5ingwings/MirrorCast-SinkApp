@@ -82,15 +82,20 @@ public class RtspResponseMessage extends RtspMessage {
     }
 
     @Override
-    public byte[] toByteArray() {
+    public byte[] toByteArray(Boolean isOnReceiveMessage) {
         StringBuilder sb = new StringBuilder();
-        sb.append(protocolVersion).append(" ").append(RtspResponseMessage.RTSP_STATUS.get(statusCode)).append("\r\n");
+
+        sb.append(protocolVersion).append(" ")
+                .append(RtspResponseMessage.RTSP_STATUS.get(statusCode)).append("\r\n");
+
         for (Map.Entry<String, String> entry : headers.entrySet()) {
             sb.append(entry.getKey()).append(": ").append(entry.getValue()).append("\r\n");
         }
-        if (this.body != null && this.body.length > 0) {
-            sb.append("Content-Length: ").append(this.body.length).append("\r\n");
-            sb.append("Content-type: ").append("text/parameters").append("\r\n");
+        if (!isOnReceiveMessage) { // 若是封装发送信息则加上以下字段
+            if (this.body != null && this.body.length > 0) {
+                sb.append("Content-Length: ").append(this.body.length).append("\r\n");
+                sb.append("Content-type: ").append("text/parameters").append("\r\n");
+            }
         }
         sb.append("\r\n");
 

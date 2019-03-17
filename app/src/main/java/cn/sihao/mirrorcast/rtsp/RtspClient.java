@@ -3,6 +3,7 @@ package cn.sihao.mirrorcast.rtsp;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.text.TextUtils;
+import android.util.Log;
 import cn.sihao.mirrorcast.OnMirrorListener;
 import cn.sihao.mirrorcast.rtp.RTPServer;
 import com.orhanobut.logger.Logger;
@@ -31,7 +32,7 @@ public class RtspClient {
     private final static int STATE_PLAYING = 0x04;
     private final static int STATE_PAUSE = 0x05;
 
-    private final static String METHOD_OPTIONS = "OPTIONS *";
+    private final static String METHOD_OPTIONS = "OPTIONS";
     private final static String METHOD_GET_PARAMETER = "GET_PARAMETER";
     private final static String METHOD_SET_PARAMETER = "SET_PARAMETER";
     private final static String METHOD_PLAY = "PLAY";
@@ -124,8 +125,7 @@ public class RtspClient {
     }
 
     public void stop() {
-        sendRequestTeardown();
-        cleanResource();
+        mHandler.post(stopConnectRunnable);
     }
 
     public boolean isStarted() {
@@ -195,6 +195,15 @@ public class RtspClient {
         }
     };
 
+    private Runnable stopConnectRunnable = new Runnable() {
+        @Override
+        public void run() {
+            Logger.t(TAG).d("stop RTSP.");
+            sendRequestTeardown();
+            cleanResource();
+        }
+    };
+
 
     private void tryConnect() {
         try {
@@ -249,8 +258,8 @@ public class RtspClient {
                         Logger.t(TAG).e("Cseq is null.");
                         return;
                     }
+                    //CSeq adjustment
                     mRtspParams.cSeq = Integer.parseInt(rParams.headers.get(KEY_CSEQ));
-
                     if (!TextUtils.isEmpty(rParams.methodType)) {
                         switch (rParams.methodType) {
                             case METHOD_OPTIONS: {
@@ -290,6 +299,8 @@ public class RtspClient {
                                 break;
                             }
                         }
+                    } else {
+                        Logger.t(TAG).d("methodType is null.");
                     }
                 } catch (Exception e) {
                     Logger.t(TAG).e("Exception:" + e.toString());
@@ -328,7 +339,9 @@ public class RtspClient {
         RtspResponseMessage rm = new RtspResponseMessage();
         rm.protocolVersion = KEY_RTSP_VERSION;
         rm.statusCode = 200;
-        rm.headers = addCommonHeader();
+        HashMap<String, String> headers = new HashMap<>();
+        headers.put(KEY_CSEQ, String.valueOf("1"));
+        rm.headers = headers;
         String date = "yyyy HH:mm:ss z";
         SimpleDateFormat sdf = new SimpleDateFormat(date);
         rm.headers.put(KEY_DATE, sdf.format(new Date()));
@@ -339,6 +352,7 @@ public class RtspClient {
     private void sendRequestM2() {
         RtspRequestMessage rm = new RtspRequestMessage();
         rm.methodType = METHOD_OPTIONS;
+        rm.path = "*";
         rm.protocolVersion = KEY_RTSP_VERSION;
         rm.headers = addCommonHeader();
         rm.headers.put(KEY_REQUIRE, "org.wfa.wfd1.0");
