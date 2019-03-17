@@ -226,7 +226,7 @@ public class RtspClient {
                 mCurState = STATE_STARTED;
             } else {
                 mCurState = STATE_STOPPED;
-                mHandler.postDelayed(startConnectRunnable,1000L);
+                mHandler.postDelayed(startConnectRunnable, 1000L);
             }
         } catch (Exception e) {
             mCurState = STATE_STOPPED;
@@ -240,8 +240,7 @@ public class RtspClient {
             @Override
             public void onRtspResponse(RtspResponseMessage rParams) {
                 if (rParams.statusCode == 200) { // 200 ok
-                    if (!TextUtils.isEmpty(rParams.headers.get(KEY_SESSION)) && !TextUtils.isEmpty(rParams.headers.get(KEY_PUBLIC))) {
-                        // source -> sink M6 response
+                    if (!TextUtils.isEmpty(rParams.headers.get(KEY_SESSION)) && !TextUtils.isEmpty(rParams.headers.get(KEY_TRANSPORT))) {// source -> sink M6 response
                         mRtspParams.session = rParams.headers.get(KEY_SESSION);
                         sendRequestPlay();
                         return;
@@ -340,9 +339,7 @@ public class RtspClient {
         RtspResponseMessage rm = new RtspResponseMessage();
         rm.protocolVersion = KEY_RTSP_VERSION;
         rm.statusCode = 200;
-        HashMap<String, String> headers = new HashMap<>();
-        headers.put(KEY_CSEQ, String.valueOf("1"));
-        rm.headers = headers;
+        rm.headers = addCommonHeader();
         String date = "yyyy HH:mm:ss z";
         SimpleDateFormat sdf = new SimpleDateFormat(date);
         rm.headers.put(KEY_DATE, sdf.format(new Date()));
@@ -386,9 +383,11 @@ public class RtspClient {
 
     private void sendResponseTeardown() {
         mCurState = STATE_STOPPING;
-        // fixme 是直接回ok吧？
-        String request = "TEARDOWN rtsp://" + mRtspParams.host + "/wfd1.0/streamid=0 RTSP/1.0\r\n" + addCommonHeader();
-        mRtspSocket.sendRtspData(request);
+        RtspResponseMessage rm = new RtspResponseMessage();
+        rm.protocolVersion = KEY_RTSP_VERSION;
+        rm.statusCode = 200;
+        rm.headers = addCommonHeader();
+        mRtspSocket.sendResponse(rm);
     }
 
     private void sendRequestM6() {
@@ -415,9 +414,9 @@ public class RtspClient {
 
 
     private void sendRequestTeardown() {
-        // fixme 是直接TEARDOWN作method吧
         mCurState = STATE_STOPPING;
-
+        // String request = "TEARDOWN rtsp://" + mRtspParams.host + "/wfd1.0/streamid=0 RTSP/1.0\r\n" + addCommonHeader();
+        // mRtspSocket.sendRtspData(request);
         RtspRequestMessage rm = new RtspRequestMessage();
         rm.methodType = METHOD_SET_PARAMETER;
         rm.path = "rtsp://" + mRtspParams.host + "/wfd1.0/streamid=0";
