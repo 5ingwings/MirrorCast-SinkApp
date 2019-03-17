@@ -3,9 +3,11 @@ package cn.sihao.mirrorcast.rtsp;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.text.TextUtils;
+import android.util.Log;
 import cn.sihao.mirrorcast.OnMirrorListener;
 import cn.sihao.mirrorcast.rtp.RTPServer;
 import com.orhanobut.logger.Logger;
+import org.w3c.dom.Text;
 
 import java.io.UnsupportedEncodingException;
 import java.text.SimpleDateFormat;
@@ -31,7 +33,7 @@ public class RtspClient {
     private final static int STATE_PLAYING = 0x04;
     private final static int STATE_PAUSE = 0x05;
 
-    private final static String METHOD_OPTIONS = "OPTIONS *";
+    private final static String METHOD_OPTIONS = "OPTIONS";
     private final static String METHOD_GET_PARAMETER = "GET_PARAMETER";
     private final static String METHOD_SET_PARAMETER = "SET_PARAMETER";
     private final static String METHOD_PLAY = "PLAY";
@@ -51,7 +53,7 @@ public class RtspClient {
     private final static String KEY_WFD_VIDEO_FORMATS = "wfd_video_formats";
 
 
-    private final static int MAX_CONN_TIME = 5;
+    private final static int MAX_CONN_TIME = 10;
 
     private Handler mHandler;
 
@@ -124,8 +126,7 @@ public class RtspClient {
     }
 
     public void stop() {
-        sendRequestTeardown();
-        cleanResource();
+        mHandler.post(stopConnectRunnable);
     }
 
     public boolean isStarted() {
@@ -195,6 +196,15 @@ public class RtspClient {
         }
     };
 
+    private Runnable stopConnectRunnable = new Runnable() {
+        @Override
+        public void run() {
+            Logger.t(TAG).d("stop RTSP.");
+            sendRequestTeardown();
+            cleanResource();
+        }
+    };
+
 
     private void tryConnect() {
         try {
@@ -216,7 +226,7 @@ public class RtspClient {
                 mCurState = STATE_STARTED;
             } else {
                 mCurState = STATE_STOPPED;
-                tryConnect();
+                mHandler.postDelayed(startConnectRunnable, 1000L);
             }
         } catch (Exception e) {
             mCurState = STATE_STOPPED;
@@ -230,8 +240,7 @@ public class RtspClient {
             @Override
             public void onRtspResponse(RtspResponseMessage rParams) {
                 if (rParams.statusCode == 200) { // 200 ok
-                    if (!TextUtils.isEmpty(rParams.headers.get(KEY_SESSION)) && !TextUtils.isEmpty(rParams.headers.get(KEY_PUBLIC))) {
-                        // source -> sink M6 response
+                    if (!TextUtils.isEmpty(rParams.headers.get(KEY_SESSION)) && !TextUtils.isEmpty(rParams.headers.get(KEY_TRANSPORT))) {// source -> sink M6 response
                         mRtspParams.session = rParams.headers.get(KEY_SESSION);
                         sendRequestPlay();
                         return;
@@ -249,8 +258,8 @@ public class RtspClient {
                         Logger.t(TAG).e("Cseq is null.");
                         return;
                     }
+                    //CSeq adjustment
                     mRtspParams.cSeq = Integer.parseInt(rParams.headers.get(KEY_CSEQ));
-
                     if (!TextUtils.isEmpty(rParams.methodType)) {
                         switch (rParams.methodType) {
                             case METHOD_OPTIONS: {
@@ -261,7 +270,7 @@ public class RtspClient {
                                 break;
                             }
                             case METHOD_GET_PARAMETER: {
-                                if (rParams.body == null || rParams.body.length <= 0) { // PLAY后 接收 source->sink 的不带body的GET_PARAMETER信息 用于keep alive
+                                if (TextUtils.isEmpty(rParams.bodyStr)) { // PLAY后 接收 source->sink 的不带body的GET_PARAMETER信息 用于keep alive
                                     sendResponseOK();
                                 } else {
                                     sendResponseM3();
@@ -290,6 +299,8 @@ public class RtspClient {
                                 break;
                             }
                         }
+                    } else {
+                        Logger.t(TAG).d("methodType is null.");
                     }
                 } catch (Exception e) {
                     Logger.t(TAG).e("Exception:" + e.toString());
@@ -339,6 +350,7 @@ public class RtspClient {
     private void sendRequestM2() {
         RtspRequestMessage rm = new RtspRequestMessage();
         rm.methodType = METHOD_OPTIONS;
+        rm.path = "*";
         rm.protocolVersion = KEY_RTSP_VERSION;
         rm.headers = addCommonHeader();
         rm.headers.put(KEY_REQUIRE, "org.wfa.wfd1.0");
@@ -350,16 +362,11 @@ public class RtspClient {
         rm.protocolVersion = KEY_RTSP_VERSION;
         rm.statusCode = 200;
         rm.headers = addCommonHeader();
-        String m3Body = "wfd_audio_codecs: " + getWfdAudioCodecs() + "\r\n" +
+        rm.bodyStr = "wfd_audio_codecs: " + getWfdAudioCodecs() + "\r\n" +
                 "wfd_video_formats: " + getWfdVideoFormats() + "\r\n" +
                 "wfd_uibc_capability: input_category_list=HIDC;hidc_cap_list=Keyboard/USB, Mouse/USB, MultiTouch/USB, Gesture/USB, RemoteControl/USB;port=none\r\n" +
                 "wfd_client_rtp_ports: RTP/AVP/" + (mRtspParams.isTCPTranslate ? "TCP" : "UDP") + ";unicast " + mRtpPort + " 0 mode=play\r\n" +
                 "wfd_content_protection: none\r\n";
-        try {
-            rm.body = m3Body.getBytes("UTF-8");
-        } catch (UnsupportedEncodingException e) {
-            Logger.t(TAG).e("UnsupportedEncodingException:" + e.toString());
-        }
         mRtspSocket.sendResponse(rm);
     }
 
@@ -376,9 +383,11 @@ public class RtspClient {
 
     private void sendResponseTeardown() {
         mCurState = STATE_STOPPING;
-        // fixme 是直接回ok吧？
-        String request = "TEARDOWN rtsp://" + mRtspParams.host + "/wfd1.0/streamid=0 RTSP/1.0\r\n" + addCommonHeader();
-        mRtspSocket.sendRtspData(request);
+        RtspResponseMessage rm = new RtspResponseMessage();
+        rm.protocolVersion = KEY_RTSP_VERSION;
+        rm.statusCode = 200;
+        rm.headers = addCommonHeader();
+        mRtspSocket.sendResponse(rm);
     }
 
     private void sendRequestM6() {
@@ -405,20 +414,16 @@ public class RtspClient {
 
 
     private void sendRequestTeardown() {
-        // fixme 是直接TEARDOWN作method吧
         mCurState = STATE_STOPPING;
-
+        // String request = "TEARDOWN rtsp://" + mRtspParams.host + "/wfd1.0/streamid=0 RTSP/1.0\r\n" + addCommonHeader();
+        // mRtspSocket.sendRtspData(request);
         RtspRequestMessage rm = new RtspRequestMessage();
         rm.methodType = METHOD_SET_PARAMETER;
         rm.path = "rtsp://" + mRtspParams.host + "/wfd1.0/streamid=0";
         rm.protocolVersion = KEY_RTSP_VERSION;
         rm.headers = addCommonHeader();
         rm.headers.put(KEY_SESSION, mRtspParams.session);
-        try {
-            rm.body = "wfd_trigger_method: TEARDOWN".getBytes("UTF-8");
-        } catch (UnsupportedEncodingException e) {
-            Logger.t(TAG).e("UnsupportedEncodingException:" + e.toString());
-        }
+        rm.bodyStr = "wfd_trigger_method: TEARDOWN";
         mRtspSocket.sendRequest(rm);
     }
 

@@ -15,8 +15,11 @@ class MiraMgr {
 
     private var mMiraHandler: Handler? = null
     private var mRTSPClient: RtspClient? = null
-    private var mMiraRunnable: Runnable? = null
-    private var isStart: Boolean = false
+
+    private var mWiFiDirectRunnable: Runnable? = null
+    private var mRtspRunnable: Runnable? = null
+
+    private var mContext: Context? = null
 
     companion object {
 
@@ -29,11 +32,13 @@ class MiraMgr {
 
     init {
         initMiraListener()
-        initMiraRunnable()
 
         if (mWiFiDirectMgr == null) {
             mWiFiDirectMgr = WiFiDirectMgr(mMiraCastListener)
         }
+
+        initWiFiDirectRunnable()
+        initRtspRunnable()
 
         val mMiraHandlerThread = HandlerThread("miraMgrThread")
         mMiraHandlerThread.start()
@@ -43,15 +48,13 @@ class MiraMgr {
     }
 
     public fun start(context: Context) {
-        mWiFiDirectMgr?.start(context)
-
-        if (!isStart && mMiraHandler != null) {
-            mMiraHandler!!.post(mMiraRunnable)
+        this.mContext = context
+        if (mMiraHandler != null) {
+            mMiraHandler!!.post(mWiFiDirectRunnable)
         }
     }
 
     public fun stop() {
-        isStart = false
         // RTSP关闭
         if (mRTSPClient != null) {
             mRTSPClient!!.stop()
@@ -66,62 +69,67 @@ class MiraMgr {
 
         // p2p发现关闭
         mWiFiDirectMgr?.stop()
+        mMiraHandler?.removeCallbacks(mWiFiDirectRunnable)
+        mMiraHandler?.removeCallbacks(mRtspRunnable)
     }
 
-    private fun initMiraRunnable() {
-        mMiraRunnable = Runnable {
-            while (!isStart) {
-                if (mWiFiDirectMgr == null) {
-                    Logger.t(TAG).e("WiFiDirectMgr is null.")
-                    return@Runnable
-                }
-                if (mWiFiDirectMgr!!.isGroupFormed) {
-                    if (mRTSPClient != null && !mRTSPClient!!.isStopped) {
-                        mRTSPClient!!.stop()
-                        mRTSPClient = null
-                    }
+    private fun initWiFiDirectRunnable() {
+        mWiFiDirectRunnable = Runnable {
+            if (mWiFiDirectMgr == null) {
+                Logger.t(TAG).e("WiFiDirectMgr is null.")
+                return@Runnable
+            }
+            mWiFiDirectMgr!!.start(mContext)
+        }
+    }
 
-                    mRTSPClient = RtspClient(
-                        "rtsp://" + mWiFiDirectMgr!!.sourceIp + "/",
-                        mWiFiDirectMgr!!.sourcePort
-                    )
-                    mRTSPClient!!.setMirrorListener(mMiraCastListener)
-                    mRTSPClient!!.start()
+    private fun initRtspRunnable() {
+        mRtspRunnable = Runnable {
+            if (!mWiFiDirectMgr!!.isGroupFormed) {
+                Logger.t(TAG).d("wifi p2p group is not formed,try again.")
+                mMiraHandler?.postDelayed(mRtspRunnable, 1000L)
+            }
 
-                    isStart = true
-                    break
-                }
-
-                try {
-                    Thread.sleep(2000)
-                } catch (ignore: Exception) {
+            if (mWiFiDirectMgr!!.isGroupFormed) {
+                if (mRTSPClient != null && !mRTSPClient!!.isStopped) {
+                    mRTSPClient!!.stop()
+                    mRTSPClient = null
                 }
 
-                // Logger.t(TAG).d("next query RTSP connection state.");
+                mRTSPClient = RtspClient(
+                    "rtsp://" + mWiFiDirectMgr?.sourceIp + "/",
+                    mWiFiDirectMgr!!.sourcePort
+                )
+                mRTSPClient!!.setMirrorListener(mMiraCastListener)
+                mRTSPClient!!.start()
             }
         }
     }
 
+
+
     private fun initMiraListener() {
         mMiraCastListener = object : OnMirrorListener {
+            override fun onSessionBegin() {
+                Logger.t(TAG).d("onSessionBegin.")
+                mMiraHandler?.post(mRtspRunnable)
+            }
+
             override fun onSessionEnd() {
                 Logger.t(TAG).d("onSessionEnd.")
+                mMiraHandler?.removeCallbacks(mRtspRunnable)
             }
 
             override fun onMirrorStart() {
                 Logger.t(TAG).d("onMirrorStart.")
             }
 
-            override fun onMirrorData(seqNum: Long, data: ByteArray?) {
-                Logger.t(TAG).d("onMirrorData: seqNum:$seqNum, dataLength:${data?.size}")
-            }
-
             override fun onMirrorStop() {
                 Logger.t(TAG).d("onMirrorStop.")
             }
 
-            override fun onSessionBegin() {
-                Logger.t(TAG).d("onSessionBegin.")
+            override fun onMirrorData(seqNum: Long, data: ByteArray?) {
+                Logger.t(TAG).d("onMirrorData: seqNum:$seqNum, dataLength:${data?.size}")
             }
         }
     }

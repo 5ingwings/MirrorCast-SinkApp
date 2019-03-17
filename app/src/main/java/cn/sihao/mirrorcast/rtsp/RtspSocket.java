@@ -3,6 +3,7 @@ package cn.sihao.mirrorcast.rtsp;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.text.TextUtils;
+import android.util.Log;
 import com.orhanobut.logger.Logger;
 
 import java.io.BufferedReader;
@@ -16,7 +17,7 @@ import java.net.SocketAddress;
 import java.util.concurrent.Semaphore;
 
 class RtspSocket {
-    private static final String TAG = "RtspSocket";
+    private static final String TAG = "miraRtspSocket";
     private Socket mSocket;
 
     private String mRtspHost;
@@ -24,6 +25,7 @@ class RtspSocket {
 
     private OutputStream mOutputStream;
     private InputStream mInputStream;
+    private BufferedReader mBufferedReader;
 
     private Handler mHandler;
     private Thread mReceiveThread;
@@ -36,6 +38,8 @@ class RtspSocket {
     }
 
     public int start(OnReceiveRTSPListener rListener) {
+        mReceiveRTSPListener = rListener;
+
         if (TextUtils.isEmpty(mRtspHost)) {
             Logger.t(TAG).d("mRtspHost is null");
             return -1;
@@ -50,6 +54,7 @@ class RtspSocket {
             mSocket.connect(socketAddress, 5000);
             mOutputStream = mSocket.getOutputStream();
             mInputStream = mSocket.getInputStream();
+            mBufferedReader = new BufferedReader(new InputStreamReader(mInputStream, "UTF-8"));
         } catch (IOException e) {
             Logger.t(TAG).e("RTSPSocket start error:" + e.toString());
             return -1;
@@ -65,7 +70,6 @@ class RtspSocket {
         mReceiveThread.start();
         signal.acquireUninterruptibly();
 
-        mReceiveRTSPListener = rListener;
         if (!mSocket.isClosed()) {
             mHandler.post(receiveOperationRunnable);
         }
@@ -86,7 +90,10 @@ class RtspSocket {
 
     public void sendRequest(RtspRequestMessage request) {
         try {
-            mOutputStream.write(request.toByteArray());
+            Logger.t(TAG).d(">>>>>>>>>> RTSP Send Message:\r\n" +
+                    request.toStringMsg(false) +
+                    "<<<<<<<<<<");
+            mOutputStream.write(request.toByteArray(false));
             mOutputStream.flush();
         } catch (IOException e) {
             e.printStackTrace();
@@ -95,7 +102,10 @@ class RtspSocket {
 
     public void sendResponse(RtspResponseMessage response) {
         try {
-            mOutputStream.write(response.toByteArray());
+            Logger.t(TAG).d(">>>>>>>>>> RTSP Send Message:\r\n" +
+                    response.toStringMsg(false) +
+                    "<<<<<<<<<<");
+            mOutputStream.write(response.toByteArray(false));
             mOutputStream.flush();
         } catch (IOException e) {
             e.printStackTrace();
@@ -115,10 +125,8 @@ class RtspSocket {
         @Override
         public void run() {
             try {
-                BufferedReader bufferedReader =
-                        new BufferedReader(new InputStreamReader(mInputStream));
                 // Read start line
-                String line = bufferedReader.readLine();
+                String line = mBufferedReader.readLine();
                 if (line != null && line.length() > 0) {
                     String cmd[] = line.split("\\s");
                     if (cmd.length == 3) {
@@ -140,7 +148,7 @@ class RtspSocket {
 
                         // Read headers
                         int contentLength = 0;
-                        String header = bufferedReader.readLine();
+                        String header = mBufferedReader.readLine();
                         while (header.length() > 0) {
                             String ss[] = header.split(":\\s");
                             if (ss.length == 2) {
@@ -149,27 +157,28 @@ class RtspSocket {
                                     contentLength = Integer.parseInt(ss[1]);
                                 }
                             }
-                            header = bufferedReader.readLine();
+                            header = mBufferedReader.readLine();
                         }
 
                         // Read body
                         if (contentLength > 0) {
-                            message.body = new byte[contentLength];
-                            // read body as byte
-                            if (-1 != mInputStream.read(message.body, 0, contentLength)) {
-                                // read body as hashMap
-                                String bodyStr = new String(message.body);
-                                // fixme max split 成功吗
-                                String[] bodyLineArray = bodyStr.split("\r\n");
-                                for (String bl : bodyLineArray) {
-                                    String[] bodyLine = bl.split(":\\s");
-                                    if (bodyLine.length == 2) {
-                                        message.bodyMap.put(bodyLine[0], bodyLine[1]);
-                                    }
+                            char[] bodyCharArray = new char[contentLength];
+                            // read body into char[]
+                            // 注意长度和编码问题 content-Length 是字节数 而这里读的是字符 若含有中文 可能读取的内容比实际内容长 数组后面会有''(无内容）的元素
+                            mBufferedReader.read(bodyCharArray, 0, contentLength);
+                            // read body into hashMap
+                            message.bodyStr = String.valueOf(bodyCharArray);
+                            String[] bodyLineArray = message.bodyStr.split("\r\n");
+                            for (String bl : bodyLineArray) {
+                                String[] bodyLine = bl.split(":\\s");
+                                if (bodyLine.length == 2) {
+                                    message.bodyMap.put(bodyLine[0], bodyLine[1]);
                                 }
                             }
                         }
-                        Logger.t(TAG).d(">>>>>>>>>> RTSP Receive Message:\r\n" + message.toString() + "<<<<<<<<<<");
+                        Logger.t(TAG).d(">>>>>>>>>> RTSP Receive Message:\r\n" +
+                                message.toStringMsg(true) +
+                                "<<<<<<<<<<");
                         if (mReceiveRTSPListener != null) {
                             if (message instanceof RtspRequestMessage) {
                                 mReceiveRTSPListener.onRtspRequest((RtspRequestMessage) message);
