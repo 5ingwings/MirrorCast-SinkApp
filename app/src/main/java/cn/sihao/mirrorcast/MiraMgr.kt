@@ -106,6 +106,8 @@ class MiraMgr {
         }
     }
 
+
+
     private fun initMiraListener() {
         mMiraCastListener = object : OnMirrorListener {
             override fun onSessionBegin() {

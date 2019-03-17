@@ -7,6 +7,7 @@ import android.util.Log;
 import cn.sihao.mirrorcast.OnMirrorListener;
 import cn.sihao.mirrorcast.rtp.RTPServer;
 import com.orhanobut.logger.Logger;
+import org.w3c.dom.Text;
 
 import java.io.UnsupportedEncodingException;
 import java.text.SimpleDateFormat;
@@ -52,7 +53,7 @@ public class RtspClient {
     private final static String KEY_WFD_VIDEO_FORMATS = "wfd_video_formats";
 
 
-    private final static int MAX_CONN_TIME = 5;
+    private final static int MAX_CONN_TIME = 10;
 
     private Handler mHandler;
 
@@ -225,7 +226,7 @@ public class RtspClient {
                 mCurState = STATE_STARTED;
             } else {
                 mCurState = STATE_STOPPED;
-                tryConnect();
+                mHandler.postDelayed(startConnectRunnable,1000L);
             }
         } catch (Exception e) {
             mCurState = STATE_STOPPED;
@@ -270,7 +271,7 @@ public class RtspClient {
                                 break;
                             }
                             case METHOD_GET_PARAMETER: {
-                                if (rParams.body == null || rParams.body.length <= 0) { // PLAY后 接收 source->sink 的不带body的GET_PARAMETER信息 用于keep alive
+                                if (TextUtils.isEmpty(rParams.bodyStr)) { // PLAY后 接收 source->sink 的不带body的GET_PARAMETER信息 用于keep alive
                                     sendResponseOK();
                                 } else {
                                     sendResponseM3();
@@ -364,16 +365,11 @@ public class RtspClient {
         rm.protocolVersion = KEY_RTSP_VERSION;
         rm.statusCode = 200;
         rm.headers = addCommonHeader();
-        String m3Body = "wfd_audio_codecs: " + getWfdAudioCodecs() + "\r\n" +
+        rm.bodyStr = "wfd_audio_codecs: " + getWfdAudioCodecs() + "\r\n" +
                 "wfd_video_formats: " + getWfdVideoFormats() + "\r\n" +
                 "wfd_uibc_capability: input_category_list=HIDC;hidc_cap_list=Keyboard/USB, Mouse/USB, MultiTouch/USB, Gesture/USB, RemoteControl/USB;port=none\r\n" +
                 "wfd_client_rtp_ports: RTP/AVP/" + (mRtspParams.isTCPTranslate ? "TCP" : "UDP") + ";unicast " + mRtpPort + " 0 mode=play\r\n" +
                 "wfd_content_protection: none\r\n";
-        try {
-            rm.body = m3Body.getBytes("UTF-8");
-        } catch (UnsupportedEncodingException e) {
-            Logger.t(TAG).e("UnsupportedEncodingException:" + e.toString());
-        }
         mRtspSocket.sendResponse(rm);
     }
 
@@ -428,11 +424,7 @@ public class RtspClient {
         rm.protocolVersion = KEY_RTSP_VERSION;
         rm.headers = addCommonHeader();
         rm.headers.put(KEY_SESSION, mRtspParams.session);
-        try {
-            rm.body = "wfd_trigger_method: TEARDOWN".getBytes("UTF-8");
-        } catch (UnsupportedEncodingException e) {
-            Logger.t(TAG).e("UnsupportedEncodingException:" + e.toString());
-        }
+        rm.bodyStr = "wfd_trigger_method: TEARDOWN";
         mRtspSocket.sendRequest(rm);
     }
 

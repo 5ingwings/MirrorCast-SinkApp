@@ -8,7 +8,7 @@ abstract class RtspMessage {
     HashMap<String, String> headers = new HashMap<>();
     HashMap<String, String> bodyMap = new HashMap<>();
 
-    byte[] body;
+    String bodyStr;
     String protocolVersion;
 
     public String toStringMsg(Boolean isOnReceiveMessage) {

@@ -54,7 +54,7 @@ class RtspSocket {
             mSocket.connect(socketAddress, 5000);
             mOutputStream = mSocket.getOutputStream();
             mInputStream = mSocket.getInputStream();
-            mBufferedReader = new BufferedReader(new InputStreamReader(mInputStream));
+            mBufferedReader = new BufferedReader(new InputStreamReader(mInputStream, "UTF-8"));
         } catch (IOException e) {
             Logger.t(TAG).e("RTSPSocket start error:" + e.toString());
             return -1;
@@ -128,7 +128,6 @@ class RtspSocket {
                 // Read start line
                 String line = mBufferedReader.readLine();
                 if (line != null && line.length() > 0) {
-                    Logger.t(TAG).d("here: 7 line:" + line);
                     String cmd[] = line.split("\\s");
                     if (cmd.length == 3) {
                         RtspMessage message;
@@ -163,16 +162,13 @@ class RtspSocket {
 
                         // Read body
                         if (contentLength > 0) {
-                            message.body = new byte[contentLength];
-                            // read body as byte
+                            char[] bodyCharArray = new char[contentLength];
+                            // read body into char[]
                             // 注意长度和编码问题 content-Length 是字节数 而这里读的是字符 若含有中文 可能读取的内容比实际内容长 数组后面会有''(无内容）的元素
-                            // mBufferedReader.read(message.body,0,contentLength);
-                            mInputStream.read(message.body, 0, contentLength);
-                            // read body as hashMap
-                            String bodyStr = new String(message.body, "UTF-8");
-                            // fixme max split 成功吗
-                            String[] bodyLineArray = bodyStr.split("\r\n");
-                            Logger.t(TAG).d("here:1 bodyLineArray length: " + bodyLineArray.length);
+                            mBufferedReader.read(bodyCharArray, 0, contentLength);
+                            // read body into hashMap
+                            message.bodyStr = String.valueOf(bodyCharArray);
+                            String[] bodyLineArray = message.bodyStr.split("\r\n");
                             for (String bl : bodyLineArray) {
                                 String[] bodyLine = bl.split(":\\s");
                                 if (bodyLine.length == 2) {

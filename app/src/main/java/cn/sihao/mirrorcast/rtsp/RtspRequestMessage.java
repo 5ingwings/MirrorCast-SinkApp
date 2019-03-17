@@ -28,11 +28,7 @@ public class RtspRequestMessage extends RtspMessage {
     }
 
     public RtspRequestMessage withBody(String body) {
-        try {
-            this.body = body.getBytes("UTF-8");
-        } catch (UnsupportedEncodingException e) {
-            e.printStackTrace();
-        }
+        this.bodyStr = body;
         return this;
     }
 
@@ -55,8 +51,8 @@ public class RtspRequestMessage extends RtspMessage {
             sb.append(entry.getKey()).append(": ").append(entry.getValue()).append("\r\n");
         }
         if (!isOnReceiveMessage) { // 若是封装发送信息则加上以下字段
-            if (this.body != null && this.body.length > 0) {
-                sb.append("Content-Length: ").append(this.body.length).append("\r\n");
+            if (!TextUtils.isEmpty(this.bodyStr)) {
+                sb.append("Content-Length: ").append(this.bodyStr.length()).append("\r\n");
                 sb.append("Content-type: ").append("text/parameters").append("\r\n");
             }
         }
@@ -65,16 +61,16 @@ public class RtspRequestMessage extends RtspMessage {
         byte[] data = null;
         try {
             byte[] h = sb.toString().getBytes("UTF-8");
-            if (this.body == null) {
+            if (TextUtils.isEmpty(this.bodyStr)) {
                 data = h;
             } else {
-                data = new byte[h.length + this.body.length];
+                byte[] bodyByte = this.bodyStr.getBytes("UTF-8");
+                data = new byte[h.length + bodyByte.length];
                 System.arraycopy(h, 0, data, 0, h.length);
-                System.arraycopy(this.body, 0, data, h.length, this.body.length);
+                System.arraycopy(bodyByte, 0, data, h.length, bodyByte.length);
             }
         } catch (UnsupportedEncodingException e) {
             Logger.t(TAG).e("UnsupportedEncodingException:" + e.toString());
-
         }
         return data;
     }
