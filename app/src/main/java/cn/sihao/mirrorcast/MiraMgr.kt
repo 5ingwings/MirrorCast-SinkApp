@@ -5,7 +5,6 @@ import android.os.Handler
 import android.os.HandlerThread
 import cn.sihao.mirrorcast.wifidirect.WiFiDirectMgr
 import com.orhanobut.logger.Logger
-import cn.sihao.mirrorcast.OnMirrorListener
 import cn.sihao.mirrorcast.player.BytesMediaDataSource
 import cn.sihao.mirrorcast.player.MiraPlayer
 import cn.sihao.mirrorcast.rtsp.RtspClient
@@ -13,7 +12,6 @@ import cn.sihao.mirrorcast.rtsp.RtspClient
 class MiraMgr {
     private var mWiFiDirectMgr: WiFiDirectMgr? = null
     private var mMiraCastListener: OnMirrorListener? = null
-
     private var mMiraHandler: Handler? = null
     private var mRTSPClient: RtspClient? = null
 

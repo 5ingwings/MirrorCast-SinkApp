@@ -9,7 +9,6 @@ import cn.sihao.mirrorcast.CastingActivity;
 public class MiraPlayer {
     private final static String TAG = "MiraPlayer";
     private Context mContext;
-    private String mCurrentUrl = "";
 
     public MiraPlayer(Context context) {
         mContext = context;
@@ -50,7 +49,6 @@ public class MiraPlayer {
     }
 
     public void stop() {
-        mCurrentUrl = "";
         PlayerControlManager.getInstance().stop();
     }
 

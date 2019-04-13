@@ -8,6 +8,7 @@ import android.support.v7.app.AppCompatActivity
 import android.os.Bundle
 import android.os.PowerManager
 import android.support.v4.content.LocalBroadcastManager
+import android.view.WindowManager
 import cn.sihao.mirrorcast.player.MyAndroidMediaController
 import cn.sihao.mirrorcast.player.BytesMediaDataSource
 import cn.sihao.mirrorcast.player.PlayerControlManager
@@ -59,6 +60,10 @@ class CastingActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        window.setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN)
+        // 防息屏
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        setContentView(R.layout.activity_main)
         Logger.t(TAG).d("onCreate.")
         setContentView(R.layout.activity_casting)
 
